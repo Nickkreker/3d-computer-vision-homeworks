@@ -62,18 +62,22 @@ def _build_impl(frame_sequence: pims.FramesSequence,
         cv2.circle(mask, (x, y), 5, 0, -1)
 
     corners_0_lvl2 = cv2.goodFeaturesToTrack(image_0_lvl2, mask=mask, **feature_params)
-
+    corners_0_lvl2 = corners_0_lvl2 * 2
 
     #Created corners on two levels
-    corners_0 = np.concatenate((corners_0_lvl1.reshape(-1, 2), corners_0_lvl2.reshape(-1, 2) * 2))
+    corners_0 = np.concatenate((corners_0_lvl1.reshape(-1, 2), corners_0_lvl2.reshape(-1, 2)))
     corners = FrameCorners(
         np.arange(len(corners_0_lvl1) + len(corners_0_lvl2)),
-        np.concatenate((corners_0_lvl1.reshape(-1, 2), corners_0_lvl2.reshape(-1, 2)* 2)),
+        np.concatenate((corners_0_lvl1.reshape(-1, 2), corners_0_lvl2.reshape(-1, 2))),
         np.concatenate((np.ones(len(corners_0_lvl1), dtype=int) * 7, np.ones(len(corners_0_lvl2), dtype=int) * 7 * 2))
     )
     builder.set_corners_at_frame(0, corners)
 
     image_0 = image_0_lvl1
+    
+    lvl1_num = len(corners_0_lvl1)
+    lvl2_num = len(corners_0_lvl2)
+    
     for frame, image_1 in enumerate(frame_sequence[1:], 1):
         corners_1_lvl1, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_0 * 255), np.uint8(image_1 * 255), corners_0_lvl1, None, **lk_params)
         corners_1_lvl2, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_0 * 255), np.uint8(image_1 * 255), corners_0_lvl2, None, **lk_params)
@@ -83,12 +87,13 @@ def _build_impl(frame_sequence: pims.FramesSequence,
         error = abs(corners_0_lvl1 - corners_0_lvl1r).reshape(-1, 2).max(-1)
         corners_1_lvl1 = corners_1_lvl1[error < 1]
 
-        corners_0_lvl2r, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_1 * 255), np.uint8(image_0 * 255), corners_1_lvl2, None, **lk_params)
-        error = abs(corners_0_lvl2 - corners_0_lvl2r).reshape(-1, 2).max(-1)
-        corners_1_lvl2 = corners_1_lvl2[error < 1]
+        if corners_1_lvl2 is not None:
+            corners_0_lvl2r, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_1 * 255), np.uint8(image_0 * 255), corners_1_lvl2, None, **lk_params)
+            error = abs(corners_0_lvl2 - corners_0_lvl2r).reshape(-1, 2).max(-1)
+            corners_1_lvl2 = corners_1_lvl2[error < 1]
         
         if frame % 5 == 0:
-            t1 = len(corners_1_lvl1) + len(corners_1_lvl2)
+            t1 = len(corners_1_lvl1)
 
             image_1_lvl2 = cv2.pyrDown(image_1)
             mask = np.zeros_like(image_1, np.uint8)
@@ -100,32 +105,33 @@ def _build_impl(frame_sequence: pims.FramesSequence,
             	y, x = corn
             	cv2.circle(mask, (x, y), 5, 0, -1)
 
-            corners_1_lvl1_new = cv2.goodFeaturesToTrack(image_1, mask=mask, blockSize=7, maxCorners=max(200-t1, 1),
-                                                     minDistance=7, qualityLevel=0.091, useHarrisDetector=False)
+            corners_1_lvl1_new = cv2.goodFeaturesToTrack(image_1, mask=mask, blockSize=7, maxCorners=max(lvl1_num -t1, 5),
+                                                     minDistance=7, qualityLevel=0.05, useHarrisDetector=False)
             mask = np.zeros_like(image_1_lvl2, np.uint8)
             mask[:] = 255
-            if corners_1_lvl1_new is not None:  
-                for corn in np.flip(corners_0_lvl1_new.reshape(-1, 2), axis=1):
-                    y,x = corn / 2
-                    cv2.circle(mask, (x, y), 5, 0, -1)
-                for corn in np.flip(corners_1_lvl1.reshape(-1, 2), axis=1):
-                    y,x = corn / 2
-                    cv2.circle(mask, (x,y), 5, 0, -1)
-                for corn in np.flip(corners_1_lvl2.reshape(-1, 2), axis=1):
-                	y, x= corn / 2
-                	cv2.circle(mask, (x, y), 5, 0, -1)
-                corners_1_lvl1 = np.concatenate((corners_1_lvl1, corners_1_lvl1_new))
 
-                t2 = 200 - t1 - len(corners_0_lvl1_new)
-                corners_1_lvl2_new = cv2.goodFeaturesToTrack(image_0_lvl2, mask=mask, blockSize=7, maxCorners=max(t2, 1),
+            #if corners_1_lvl1 is not None and len(corners_1_lvl1) != 0:
+            corners_1_lvl1 = np.concatenate((corners_1_lvl1, corners_1_lvl1_new))
+            for corn in np.flip(corners_1_lvl1_new.reshape(-1, 2), axis=1):
+                y,x = corn / 2
+                cv2.circle(mask, (x, y), 5, 0, -1)
+            for corn in np.flip(corners_1_lvl1.reshape(-1, 2), axis=1):
+                y,x = corn / 2
+                cv2.circle(mask, (x,y), 5, 0, -1)
+            for corn in np.flip(corners_1_lvl2.reshape(-1, 2), axis=1):
+            	y, x= corn / 2
+            	cv2.circle(mask, (x, y), 5, 0, -1)
+
+            t2 = lvl2_num - len(corners_1_lvl2)
+            corners_1_lvl2_new = cv2.goodFeaturesToTrack(image_1_lvl2, mask=mask, blockSize=7, maxCorners=max(t2, 1),
                                                          minDistance=7, qualityLevel=0.091, useHarrisDetector=False)
-                corners_1_lvl2 = np.concatenate((corners_1_lvl2, corners_1_lvl2_new))
+            corners_1_lvl2 = np.concatenate((corners_1_lvl2, corners_1_lvl2_new * 2))
                 
     
         corners = FrameCorners(
             np.arange(len(corners_1_lvl1) + len(corners_1_lvl2)),
             np.concatenate((corners_1_lvl1.reshape(-1, 2), corners_1_lvl2.reshape(-1, 2))),
-            np.concatenate(np.ones(len(corners_1_lvl1), dtype=int) * 7, np.ones(len(corners_1_lvl2), dtype=int) * 7 * 2),
+            np.concatenate((np.ones(len(corners_1_lvl1), dtype=int) * 7, np.ones(len(corners_1_lvl2), dtype=int) * 7 * 2)),
         )
 
         builder.set_corners_at_frame(frame, corners)
