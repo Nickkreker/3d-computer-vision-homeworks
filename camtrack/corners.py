@@ -34,7 +34,7 @@ class _CornerStorageBuilder:
     def build_corner_storage(self):
         return StorageImpl(item[1] for item in sorted(self._corners.items()))
 
-def calc_corners(image, max_level=2, old_corners=None):
+def calc_corners(image, max_level=1, old_corners=None):
     feature_params = dict(blockSize=7,
                           maxCorners=0,
                           minDistance=7,
@@ -79,7 +79,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
                 builder: _CornerStorageBuilder) -> None:
     # TODO
     lk_params = dict(winSize=(15, 15),
-                     maxLevel=3,
+                     maxLevel=6,
                      criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 20, 0.02))
 
     # Create corners on two levels
