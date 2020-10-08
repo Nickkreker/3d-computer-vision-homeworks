@@ -2,13 +2,13 @@
 
 __all__ = [
     'FrameCorners',
-    'filter_frame_corners',
     'CornerStorage',
     'build',
     'dump',
     'load',
     'draw',
     'without_short_tracks',
+    'filter_frame_corners'
 ]
 
 import click
