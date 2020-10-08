@@ -79,7 +79,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
     image_0 = frame_sequence[0]
     
     for frame, image_1 in enumerate(frame_sequence[1:], 1):
-        next_points, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_0 * 255), np.uint8(image_1 * 255), corners.points, None, **lk_params)
+    	next_points, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_0 * 255), np.uint8(image_1 * 255), corners.points, None, **lk_params)
 
         # backtrack
         #corners_0_lvl1r, st, err = cv2.calcOpticalFlowPyrLK(np.uint8(image_1 * 255), np.uint8(image_0 * 255), corners_1_lvl1, None, **lk_params)
@@ -88,9 +88,8 @@ def _build_impl(frame_sequence: pims.FramesSequence,
         tracked_corners = filter_frame_corners(corners, st.reshape(-1) == 1)
         builder.set_corners_at_frame(frame - 1, tracked_corners)
 
-
 	    levels = [image_1]
-	    points = np.empty((0, 1, 2), dtype=np.uint8)
+	   	points = np.empty((0, 1, 2), dtype=np.uint8)
 	    sizes = np.empty((0), dtype=np.uint8)
 	    ids = np.empty((0), dtype=np.uint8)
 
@@ -105,11 +104,9 @@ def _build_impl(frame_sequence: pims.FramesSequence,
 	    
 	    for counter, level in enumerate(levels):
 	    	scale = 2 ** counter
-
-
 	    	mask = np.zeros_like(level, np.uint8)
 	    	mask[:] = 255
-	    	if new_points is not None:
+	    	if prev_points is not None:
 	    		points_on_level = prev_points.points[(prev_points.sizes == 7 * scale).reshape(-1)]
 	    		for point in points_on_level:
 	    			x, y = point / scale
@@ -126,14 +123,14 @@ def _build_impl(frame_sequence: pims.FramesSequence,
 	    last_id = (prev_points.ids.ravel()[-1] + 1).astype(int)
 	    ids = np.arange(last_id, last_id + len(points))
 
-	corners = FrameCorners(
-		np.append(prev_points.ids.reshape(-1), ids, axis=0),
-		np.concatenate((prev_points.points.reshape(-1, 2), points.reshape(-1, 2)))
-		np.append(prev_points.sizes.reshape(-1), sizes, axis=0)
-    	)
+		corners = FrameCorners(
+			np.append(prev_points.ids.reshape(-1), ids, axis=0),
+			np.concatenate((prev_points.points.reshape(-1, 2), points.reshape(-1, 2)))
+			np.append(prev_points.sizes.reshape(-1), sizes, axis=0)
+    		)
         
-	builder.set_corners_at_frame(frame, corners)
-	image_0 = image_1
+		builder.set_corners_at_frame(frame, corners)
+		image_0 = image_1
 
 
 def build(frame_sequence: pims.FramesSequence,
