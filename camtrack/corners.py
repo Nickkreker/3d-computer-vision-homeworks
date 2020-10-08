@@ -35,21 +35,21 @@ class _CornerStorageBuilder:
         return StorageImpl(item[1] for item in sorted(self._corners.items()))
 
 def calc_corners(image, max_level=2, old_corners=None):
-	feature_params = dict(blockSize=7,
+    feature_params = dict(blockSize=7,
                           maxCorners=0,
                           minDistance=7,
                           qualityLevel=0.091,
                           useHarrisDetector=False)
 
-	levels = [frame_sequence[0]]
+    levels = [image]
     points = np.empty((0, 1, 2), dtype=np.uint8)
     sizes = np.empty((0), dtype=np.uint8)
     ids = np.empty((0), dtype=np.uint8)
 
     if old_corners is not None:
-    	last_id = (prev_points.ids.ravel()[-1] + 1).astype(int)
+        last_id = (old_corners.ids.ravel()[-1] + 1).astype(int)
     else:
-    	last_id = 0
+        last_id = 0
 
     for i in range(max_level):
         levels.append(cv2.pyrDown(levels[-1]))
