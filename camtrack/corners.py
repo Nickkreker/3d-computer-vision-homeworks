@@ -2,12 +2,13 @@
 
 __all__ = [
     'FrameCorners',
+    'filter_frame_corners',
     'CornerStorage',
     'build',
     'dump',
     'load',
     'draw',
-    'without_short_tracks'
+    'without_short_tracks',
 ]
 
 import click
@@ -16,7 +17,7 @@ import numpy as np
 import pims
 
 from _corners import FrameCorners, CornerStorage, StorageImpl
-from _corners import dump, load, draw, without_short_tracks, create_cli
+from _corners import dump, load, draw, without_short_tracks, create_cli, filter_frame_corners
 
 
 class _CornerStorageBuilder:
@@ -66,7 +67,7 @@ def _build_impl(frame_sequence: pims.FramesSequence,
 
         if new_points is not None:
             points = np.append(points, new_points * scale, axis=0)
-            sizes = np.append(sizes, (np.ones(len(new_corners), dtype=int) * 7 * scale), axis=0)
+            sizes = np.append(sizes, (np.ones(len(new_points), dtype=int) * 7 * scale), axis=0)
 
     corners = FrameCorners(
         np.arange(len(points)),
@@ -115,18 +116,18 @@ def _build_impl(frame_sequence: pims.FramesSequence,
             new_points = cv2.goodFeaturesToTrack(level, mask=mask, **feature_params)
 
             if new_points is not None:
+                #print(new_points, "\n")
                 points = np.append(points, new_points * scale, axis=0)
-                sizes = np.append(sizes, (np.ones(len(new_corners), dtype=int) * 7 * scale))
+                sizes = np.append(sizes, (np.ones(len(new_points), dtype=int) * 7 * scale))
+        points = np.append(tracked_corners.points.reshape(-1, 2), points.reshape(-1, 2), axis=0)
+        sizes = np.append(tracked_corners.sizes.reshape(-1), sizes, axis=0)
     
-                points = np.concatenate((tracked_corners.points.reshape(-1, 2), points.reshape(-1, 2)))
-                sizes = np.concatenate((tracked_corners.sizes.reshape(-1), sizes))
+        last_id = (prev_points.ids.ravel()[-1] + 1).astype(int)
+        ids = np.arange(last_id, last_id + len(points))
     
-                last_id = (prev_points.ids.ravel()[-1] + 1).astype(int)
-                ids = np.arange(last_id, last_id + len(points))
-    
-            corners = FrameCorners(
+        corners = FrameCorners(
                 np.append(prev_points.ids.reshape(-1), ids, axis=0),
-                np.concatenate((prev_points.points.reshape(-1, 2), points.reshape(-1, 2))),
+                np.append(prev_points.points.reshape(-1, 2), points.reshape(-1, 2), axis=0),
                 np.append(prev_points.sizes.reshape(-1), sizes, axis=0)
             )
 
