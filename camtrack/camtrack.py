@@ -23,8 +23,7 @@ from _camtrack import (
     triangulate_correspondences,
     TriangulationParameters,
     Correspondences,
-    rodrigues_and_translation_to_view_mat3x4,
-    filter_frame_corners
+    rodrigues_and_translation_to_view_mat3x4
 )
 
 def untracked_frames(view_mats):
