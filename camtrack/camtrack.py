@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple
 import cv2
 
 import numpy as np
+import sortednp as snp
 
 from corners import CornerStorage
 from data3d import CameraParameters, PointCloud, Pose
@@ -23,7 +24,8 @@ from _camtrack import (
     triangulate_correspondences,
     TriangulationParameters,
     Correspondences,
-    rodrigues_and_translation_to_view_mat3x4
+    rodrigues_and_translation_to_view_mat3x4,
+    eye3x4
 )
 
 def untracked_frames(view_mats):
@@ -61,9 +63,6 @@ def calc_camera_pose(frame, corner_storage, cloud, intrinsic_mat):
     inliers = np.asarray(inliers, dtype=np.int).flatten()
     points3d = np.array(points3d)
     points2d = np.array(points2d)
-    
-    points3d = points3d[inliers]
-    points2d = points2d[inliers]
 
     _, rvec, tvec = cv2.solvePnP(objectPoints=points3d[inliers],
                                  imagePoints=points2d[inliers],
@@ -116,7 +115,7 @@ def add_new_point(corner, frames_of_corner, view_mats, tvecs, corner_storage, cl
             cloud[ids[0]] = points3d[0]
             cur_corners_occurencies.pop(ids[0], None)
 
-def calc_known_views(instrinsic_mat, indent=5, min_points=1500):
+def calc_known_views(corner_storage, instrinsic_mat, indent=5, min_points=1500):
     num_frames = len(corner_storage)
     known_view_1 = (None, None)
     known_view_2 = (None, None)
@@ -137,13 +136,17 @@ def calc_known_views(instrinsic_mat, indent=5, min_points=1500):
             if mask_h.sum() / mask_e.sum() > 0.5:
                 continue
             
-            corrs = Correspondences(corrs.ids[mask], points_1[mask], points_2[mask])
+            corrs = Correspondences(corrs.ids[(mask_e==1)], points_1[(mask_e==1)], points_2[(mask_e==1)])
 
 
             R1, R2, t = cv2.decomposeEssentialMat(E)
 
             for poss_pose in [Pose(R1.T, R1.T@t), Pose(R1.T, R1.T@(-t), Pose(R2.T, R2.T@t), Pose(R2.T, R2.T@(-t))]:
-                points3d, _, _ = triangulate_correspondences(corrs, eye3x4, pose_to_view_mat3x4(poss_pose), intrinsic_mat, triang_params)
+                points3d, _, _ = triangulate_correspondences(corrs, eye3x4, pose_to_view_mat3x4(poss_pose), intrinsic_mat,
+                                                             TriangulationParameters(max_reprojection_error=7.5,
+                                                                                     min_triangulation_angle_deg=1.0,
+                                                                                     min_depth=0.1)
+                                                             )
                 if len(points3d) > num_points:
                     num_points = len(points3d)
                     known_view_1 = (frame_1, view_mat3x4_to_pose(eye3x4))
@@ -156,14 +159,15 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
                           known_view_1: Optional[Tuple[int, Pose]] = None,
                           known_view_2: Optional[Tuple[int, Pose]] = None) \
         -> Tuple[List[Pose], PointCloud]:
-    if known_view_1 is None or known_view_2 is None:
-        raise NotImplementedError()
 
     rgb_sequence = frameseq.read_rgb_f32(frame_sequence_path)
     intrinsic_mat = to_opencv_camera_mat3x3(
         camera_parameters,
         rgb_sequence[0].shape[0]
     )
+
+    if known_view_1 is None or known_view_2 is None:
+        known_view_1, known_view_2 = calc_known_views(corner_storage, intrinsic_mat)
 
     # TODO: implement
     num_frames_retr = 10
@@ -189,8 +193,8 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
 
     cloud = {}
 
-    correspondences = build_correspondences(corner_storage[frame_1], corner_storage[frame_2])
-    points3d, ids, _ = triangulate_correspondences(correspondences,
+    corrs = build_correspondences(corner_storage[frame_1], corner_storage[frame_2])
+    points3d, ids, _ = triangulate_correspondences(corrs,
                                                    view_mat_1,
                                                    view_mat_2,
                                                    intrinsic_mat,
