@@ -34,9 +34,6 @@ class _CornerStorageBuilder:
     def build_corner_storage(self):
         return StorageImpl(item[1] for item in sorted(self._corners.items()))
 
-
-last_id = 0
-
 def calc_corners(image, max_level=1, old_corners=None):
     feature_params = dict(blockSize=7,
                           maxCorners=0,

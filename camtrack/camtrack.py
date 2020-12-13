@@ -167,7 +167,6 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
         known_view_1, known_view_2 = calc_known_views(corner_storage, intrinsic_mat)
 
     # TODO: implement
-    print('something works')
     num_frames_retr = 10
     triang_params = TriangulationParameters(max_reprojection_error=8.0,
                                             min_triangulation_angle_deg=1.0,
