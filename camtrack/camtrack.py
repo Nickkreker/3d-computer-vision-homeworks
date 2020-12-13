@@ -28,8 +28,8 @@ from _camtrack import (
 
 def untracked_frames(view_mats):
     frames = []
-    for frame, mat in enumerate(view_mats):
-        if mat is None:
+    for frame, view_mat in enumerate(view_mats):
+        if view_mat is None:
             frames.append(frame)
     return frames
 
@@ -61,6 +61,9 @@ def calc_camera_pose(frame, corner_storage, cloud, intrinsic_mat):
     inliers = np.asarray(inliers, dtype=np.int).flatten()
     points3d = np.array(points3d)
     points2d = np.array(points2d)
+    
+    points3d = points3d[inliers]
+    points2d = points2d[inliers]
 
     _, rvec, tvec = cv2.solvePnP(objectPoints=points3d[inliers],
                                  imagePoints=points2d[inliers],
@@ -113,6 +116,39 @@ def add_new_point(corner, frames_of_corner, view_mats, tvecs, corner_storage, cl
             cloud[ids[0]] = points3d[0]
             cur_corners_occurencies.pop(ids[0], None)
 
+def calc_known_views(instrinsic_mat, indent=5, min_points=1500):
+    num_frames = len(corner_storage)
+    known_view_1 = (None, None)
+    known_view_2 = (None, None)
+    num_points = -1
+
+    for frame_1 in range(num_frames):
+        for frame_2 in range(frame_1 + indent, num_frames):
+            corrs = build_correspondences(corner_storage[frame_1], corner_storage[frame_2])
+            points_1 = corrs.points_1
+            points_2 = corrs.points_2
+            
+            H, mask_h = cv2.findHomography(points_1, points_2, method=cv2.RANSAC)
+            mask_h = mask_h.reshape(-1)
+            
+            E, mask_e = cv2.findEssentialMat(points_1, points_2, method=cv2.RANSAC, cameraMatrix=intrinsic_mat)
+            mask_e = mask_e.reshape(-1)
+            
+            if mask_h.sum() / mask_e.sum() > 0.5:
+                continue
+            
+            corrs = Correspondences(corrs.ids[mask], points_1[mask], points_2[mask])
+
+
+            R1, R2, t = cv2.decomposeEssentialMat(E)
+
+            for poss_pose in [Pose(R1.T, R1.T@t), Pose(R1.T, R1.T@(-t), Pose(R2.T, R2.T@t), Pose(R2.T, R2.T@(-t))]:
+                points3d, _, _ = triangulate_correspondences(corrs, eye3x4, pose_to_view_mat3x4(poss_pose), intrinsic_mat, triang_params)
+                if len(points3d) > num_points:
+                    num_points = len(points3d)
+                    known_view_1 = (frame_1, view_mat3x4_to_pose(eye3x4))
+                    known_view_2 = (frame_2, poss_pose)
+    return known_view_1, known_view_2
 
 def track_and_calc_colors(camera_parameters: CameraParameters,
                           corner_storage: CornerStorage,
