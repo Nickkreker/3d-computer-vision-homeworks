@@ -115,7 +115,7 @@ def add_new_point(corner, frames_of_corner, view_mats, tvecs, corner_storage, cl
             cloud[ids[0]] = points3d[0]
             cur_corners_occurencies.pop(ids[0], None)
 
-def calc_known_views(corner_storage, instrinsic_mat, indent=5, min_points=1500):
+def calc_known_views(corner_storage, intrinsic_mat, indent=5, min_points=1500):
     num_frames = len(corner_storage)
     known_view_1 = (None, None)
     known_view_2 = (None, None)
@@ -141,15 +141,12 @@ def calc_known_views(corner_storage, instrinsic_mat, indent=5, min_points=1500):
 
             R1, R2, t = cv2.decomposeEssentialMat(E)
 
-            for poss_pose in [Pose(R1.T, R1.T@t), Pose(R1.T, R1.T@(-t), Pose(R2.T, R2.T@t), Pose(R2.T, R2.T@(-t))]:
-                points3d, _, _ = triangulate_correspondences(corrs, eye3x4, pose_to_view_mat3x4(poss_pose), intrinsic_mat,
-                                                             TriangulationParameters(max_reprojection_error=7.5,
-                                                                                     min_triangulation_angle_deg=1.0,
-                                                                                     min_depth=0.1)
-                                                             )
+            
+            for poss_pose in [Pose(R1.T, R1.T@t), Pose(R1.T, R1.T@(-t)), Pose(R2.T, R2.T@t), Pose(R2.T, R2.T@(-t))]:
+                points3d, _, _ = triangulate_correspondences(corrs, eye3x4(), pose_to_view_mat3x4(poss_pose), intrinsic_mat, TriangulationParameters(1, 2, .1))
                 if len(points3d) > num_points:
                     num_points = len(points3d)
-                    known_view_1 = (frame_1, view_mat3x4_to_pose(eye3x4))
+                    known_view_1 = (frame_1, view_mat3x4_to_pose(eye3x4()))
                     known_view_2 = (frame_2, poss_pose)
     return known_view_1, known_view_2
 
@@ -170,6 +167,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
         known_view_1, known_view_2 = calc_known_views(corner_storage, intrinsic_mat)
 
     # TODO: implement
+    print('something works')
     num_frames_retr = 10
     triang_params = TriangulationParameters(max_reprojection_error=8.0,
                                             min_triangulation_angle_deg=1.0,
@@ -181,6 +179,8 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
 
     frame_1 = known_view_1[0]
     frame_2 = known_view_2[0]
+
+    print(f'{frame_1}, {frame_2}')
 
     tvecs[frame_1] = known_view_1[1].t_vec
     tvecs[frame_2] = known_view_2[1].t_vec
