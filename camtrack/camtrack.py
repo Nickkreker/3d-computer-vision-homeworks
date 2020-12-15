@@ -75,9 +75,9 @@ def calc_camera_pose(frame, corner_storage, cloud, intrinsic_mat):
     return rvec, tvec, len(inliers)
 
 
-def add_new_point(corner, frames_of_corner, view_mats, tvecs, corner_storage, cloud, cur_corners_occurencies, intrinsic_mat):
+def add_new_point(corner, corner_to_frames, view_mats, tvecs, corner_storage, cloud, cur_corners_occurencies, intrinsic_mat):
     frames = []
-    for frame in frames_of_corner[corner]:
+    for frame in corner_to_frames[corner]:
         if view_mats[frame[0]] is not None:
             frames.append(frame)
 
@@ -115,7 +115,7 @@ def add_new_point(corner, frames_of_corner, view_mats, tvecs, corner_storage, cl
             cloud[ids[0]] = points3d[0]
             cur_corners_occurencies.pop(ids[0], None)
 
-def calc_known_views(corner_storage, intrinsic_mat, indent=5, min_points=1500):
+def calc_known_views(corner_storage, intrinsic_mat, indent=5):
     num_frames = len(corner_storage)
     known_view_1 = (None, None)
     known_view_2 = (None, None)
@@ -138,12 +138,12 @@ def calc_known_views(corner_storage, intrinsic_mat, indent=5, min_points=1500):
             
             corrs = Correspondences(corrs.ids[(mask_e==1)], points_1[(mask_e==1)], points_2[(mask_e==1)])
 
-
             R1, R2, t = cv2.decomposeEssentialMat(E)
 
-            
             for poss_pose in [Pose(R1.T, R1.T@t), Pose(R1.T, R1.T@(-t)), Pose(R2.T, R2.T@t), Pose(R2.T, R2.T@(-t))]:
-                points3d, _, _ = triangulate_correspondences(corrs, eye3x4(), pose_to_view_mat3x4(poss_pose), intrinsic_mat, TriangulationParameters(1, 2, .1))
+                points3d, _, _ = triangulate_correspondences(corrs, eye3x4(), pose_to_view_mat3x4(poss_pose),
+                                                             intrinsic_mat, TriangulationParameters(1, 2, .1))
+
                 if len(points3d) > num_points:
                     num_points = len(points3d)
                     known_view_1 = (frame_1, view_mat3x4_to_pose(eye3x4()))
@@ -168,25 +168,23 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
 
     # TODO: implement
     num_frames_retr = 10
-    triang_params = TriangulationParameters(max_reprojection_error=8.0,
-                                            min_triangulation_angle_deg=1.0,
-                                            min_depth=.1)
+    triang_params = TriangulationParameters(8.0, 1.0, .1)
 
-    frame_count = len(corner_storage)
-    view_mats = [None] * frame_count
-    tvecs = [None] * frame_count
+    num_frames = len(corner_storage)
 
     frame_1 = known_view_1[0]
     frame_2 = known_view_2[0]
 
     print(f'{frame_1}, {frame_2}')
 
+    tvecs = [None] * num_frames
     tvecs[frame_1] = known_view_1[1].t_vec
     tvecs[frame_2] = known_view_2[1].t_vec
 
     view_mat_1 = pose_to_view_mat3x4(known_view_1[1])
     view_mat_2 = pose_to_view_mat3x4(known_view_2[1])
 
+    view_mats = [None] * num_frames
     view_mats[frame_1] = view_mat_1
     view_mats[frame_2] = view_mat_2
 
@@ -202,15 +200,15 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
         cloud[id] = point3d
 
     current_corners_occurences = {}
-    frames_of_corner = {}
+    corner_to_frames = {}
 
     for i, corners in enumerate(corner_storage):
-        for id_in_list, j in enumerate(corners.ids.flatten()):
-            current_corners_occurences[j] = 0
-            if j not in frames_of_corner.keys():
-                frames_of_corner[j] = [[i, id_in_list]]
+        for j, id in enumerate(corners.ids.flatten()):
+            current_corners_occurences[id] = 0
+            if id not in corner_to_frames.keys():
+                corner_to_frames[id] = [[i, j]]
             else:
-                frames_of_corner[j].append([i, id_in_list])
+                corner_to_frames[id].append([i, j])
 
     while len(untracked_frames(view_mats)) > 0:
         untr_frames = untracked_frames(view_mats)
@@ -240,7 +238,7 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
                     corners_to_add.append(id)
 
         for corner in corners_to_add:
-            add_new_point(corner, frames_of_corner, view_mats, tvecs, corner_storage, cloud, current_corners_occurences, intrinsic_mat)
+            add_new_point(corner, corner_to_frames, view_mats, tvecs, corner_storage, cloud, current_corners_occurences, intrinsic_mat)
 
         print(f"Frame: {best_frame}, Inliers: {max_num_inl}")
         print(f"Cloud size: {len(cloud)}")
@@ -248,11 +246,11 @@ def track_and_calc_colors(camera_parameters: CameraParameters,
         tvecs[best_frame] = best_tvec
 
     last_mat = None
-    for nframe in range(frame_count):
-        if view_mats[i] is None:
-            view_mats[i] = last_mat
+    for frame in range(num_frames):
+        if view_mats[frame] is None:
+            view_mats[frame] = last_mat
         else:
-            last_mat = view_mats[i]
+            last_mat = view_mats[frame]
 
     ids = []
     points = []
