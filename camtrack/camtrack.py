@@ -124,13 +124,24 @@ def calc_known_views(corner_storage, intrinsic_mat, indent=5):
     for frame_1 in range(num_frames):
         for frame_2 in range(frame_1 + indent, num_frames):
             corrs = build_correspondences(corner_storage[frame_1], corner_storage[frame_2])
+            
+            if len(corrs.ids) < 6:
+                continue
+            
             points_1 = corrs.points_1
             points_2 = corrs.points_2
             
             H, mask_h = cv2.findHomography(points_1, points_2, method=cv2.RANSAC)
+            if mask_h is None:
+                continue
+
             mask_h = mask_h.reshape(-1)
             
             E, mask_e = cv2.findEssentialMat(points_1, points_2, method=cv2.RANSAC, cameraMatrix=intrinsic_mat)
+           
+            if mask_e is None:
+                continue
+
             mask_e = mask_e.reshape(-1)
             
             if mask_h.sum() / mask_e.sum() > 0.5:
@@ -152,7 +163,7 @@ def calc_known_views(corner_storage, intrinsic_mat, indent=5):
 
 def track_and_calc_colors(camera_parameters: CameraParameters,
                           corner_storage: CornerStorage,
-                          frame_sequence_path: str,
+                            frame_sequence_path: str,
                           known_view_1: Optional[Tuple[int, Pose]] = None,
                           known_view_2: Optional[Tuple[int, Pose]] = None) \
         -> Tuple[List[Pose], PointCloud]:
